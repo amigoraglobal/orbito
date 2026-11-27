@@ -55,6 +55,14 @@ async function init() {
     const cred = await firebase.auth().signInAnonymously();
     uid = cred.user.uid;
     db.ref('.info/serverTimeOffset').on('value', s => { serverOffset = s.val() || 0; });
+    try {
+      const banSnap = await db.ref('bans/' + uid).once('value');
+      if (banSnap.exists()) {
+        $('cfgWarn').textContent = 'This browser has been blocked for breaking the Orbito rules.';
+        $('cfgWarn').classList.remove('hidden');
+        return;
+      }
+    } catch (e) { /* ban list not readable yet: continue */ }
     $('startVideo').disabled = false;
     $('startAudio').disabled = false;
   } catch (e) {

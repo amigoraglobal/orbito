@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b1020">
+<title>Orbito Admin</title>
+<link rel="icon" href="icon.svg">
+<style>
+:root{--bg:#0b1020;--card:#151b30;--line:#262e4d;--text:#eef1ff;--muted:#a3acd1;--a:#7c5cff;--red:#ff4d6a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5}
+main{max-width:640px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:24px;margin:0 0 12px}
+h2{font-size:17px;margin:24px 0 8px}
+p{color:var(--muted);font-size:14px;margin:8px 0}
+.hidden{display:none!important}
+.note{background:#3a2a12;border:1px solid #7a5a1c;color:#ffd58a;padding:10px 12px;border-radius:10px;font-size:14px;margin:0 0 12px}
+button{font:inherit;color:#fff;background:#1d2542;border:1px solid var(--line);border-radius:10px;padding:9px 14px;cursor:pointer}
+button.primary{background:var(--a);border:0}
+button.danger{background:var(--red);border:0}
+code{display:block;word-break:break-all;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;margin:8px 0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.who{font-size:13px;color:var(--muted);word-break:break-all}
+.row{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.id{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.acts{display:flex;gap:6px;flex:none}
+.empty{color:var(--muted);font-size:14px;padding:8px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Orbito admin</h1>
+  <div id="msg" class="note hidden"></div>
+
+  <section id="login" class="hidden">
+    <p>Sign in with the Google account you use for Firebase.</p>
+    <button class="primary" id="signin">Sign in with Google</button>
+  </section>
+
+  <section id="notAdmin" class="hidden">
+    <p>You are signed in, but this account is not an admin yet. Your UID is:</p>
+    <code id="uid"></code>
+    <button id="copyUid">Copy UID</button>
+    <button id="signout2">Sign out</button>
+  </section>
+
+  <section id="panel" class="hidden">
+    <div class="top">
+      <span class="who" id="who"></span>
+      <button id="signout">Sign out</button>
+    </div>
+    <h2>Reported users</h2>
+    <div id="reports"></div>
+    <h2>Banned users</h2>
+    <div id="bans"></div>
+  </section>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const app = firebase.initializeApp(window.ORBITO_CONFIG, 'admin');
+const auth = app.auth();
+const db = app.database();
+let reportsRef = null, bansRef = null;
+let reports = {}, bans = {};
+
+function show(id) {
+  ['login', 'notAdmin', 'panel'].forEach(s => $(s).classList.toggle('hidden', s !== id));
+}
+function note(t) {
+  const m = $('msg');
+  m.textContent = t || '';
+  m.classList.toggle('hidden', !t);
+}
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function btn(label, cls, fn) {
+  const b = el('button', cls, label);
+  b.onclick = fn;
+  return b;
+}
+function fmt(ts) { return ts ? new Date(ts).toLocaleString() : '-'; }
+function short(id) { return id.length > 14 ? id.slice(0, 8) + '…' + id.slice(-4) : id; }
+
+$('signin').onclick = async () => {
+  note('');
+  try { await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch (e) { note('Sign-in failed: ' + e.message); }
+};
+$('signout').onclick = () => auth.signOut();
+$('signout2').onclick = () => auth.signOut();
+$('copyUid').onclick = () => {
+  const t = $('uid').textContent;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(t).then(() => note('UID copied.')).catch(() => note('Long-press the UID to copy it.'));
+  } else {
+    note('Long-press the UID to copy it.');
+  }
+};
+
+auth.onAuthStateChanged(async u => {
+  detach();
+  note('');
+  if (!u) { show('login'); return; }
+  let isAdmin = false;
+  try {
+    const s = await db.ref('admins/' + u.uid).once('value');
+    isAdmin = s.exists();
+  } catch (e) { isAdmin = false; }
+  if (!isAdmin) {
+    $('uid').textContent = u.uid;
+    show('notAdmin');
+    return;
+  }
+  $('who').textContent = u.email || u.uid;
+  show('panel');
+  attach();
+});
+
+function attach() {
+  reportsRef = db.ref('reports').orderByChild('ts').limitToLast(300);
+  reportsRef.on('value', s => { reports = s.val() || {}; render(); }, e => note('Cannot read reports: ' + e.message));
+  bansRef = db.ref('bans');
+  bansRef.on('value', s => { bans = s.val() || {}; render(); }, e => note('Cannot read bans: ' + e.message));
+}
+function detach() {
+  if (reportsRef) { reportsRef.off(); reportsRef = null; }
+  if (bansRef) { bansRef.off(); bansRef = null; }
+}
+
+function render() {
+  const groups = {};
+  Object.keys(reports).forEach(k => {
+    const r = reports[k];
+    if (!r || !r.against) return;
+    const g = groups[r.against] || (groups[r.against] = { id: r.against, keys: [], by: new Set(), last: 0 });
+    g.keys.push(k);
+    g.by.add(r.by);
+    g.last = Math.max(g.last, r.ts || 0);
+  });
+  const list = Object.keys(groups).map(k => groups[k]).sort((a, b) => b.by.size - a.by.size || b.last - a.last);
+
+  const box = $('reports');
+  box.textContent = '';
+  if (!list.length) box.append(el('div', 'empty', 'No reports yet.'));
+  list.forEach(g => {
+    const banned = !!bans[g.id];
+    const row = el('div', 'row');
+    const info = el('div');
+    info.append(
+      el('div', 'id', short(g.id)),
+      el('div', 'sub', g.keys.length + (g.keys.length > 1 ? ' reports' : ' report') + ' from ' + g.by.size + (g.by.size > 1 ? ' people' : ' person') + ' · last ' + fmt(g.last) + (banned ? ' · BANNED' : ''))
+    );
+    const acts = el('div', 'acts');
+    if (!banned) acts.append(btn('Ban', 'danger', () => ban(g.id)));
+    acts.append(btn('Clear', '', () => clearReports(g)));
+    row.append(info, acts);
+    box.append(row);
+  });
+
+  const bbox = $('bans');
+  bbox.textContent = '';
+  const ids = Object.keys(bans);
+  if (!ids.length) bbox.append(el('div', 'empty', 'Nobody is banned.'));
+  ids.forEach(id => {
+    const row = el('div', 'row');
+    const info = el('div');
+    info.append(el('div', 'id', short(id)), el('div', 'sub', 'Banned ' + fmt(bans[id] && bans[id].ts)));
+    const acts = el('div', 'acts');
+    acts.append(btn('Unban', '', () => unban(id)));
+    row.append(info, acts);
+    bbox.append(row);
+  });
+}
+
+async function ban(id) {
+  if (!confirm('Ban ' + short(id) + '? They will not be able to use Orbito on that browser.')) return;
+  try {
+    await db.ref('bans/' + id).set({ ts: firebase.database.ServerValue.TIMESTAMP, by: auth.currentUser.uid });
+    note('Banned.');
+  } catch (e) { note('Failed: ' + e.message); }
+}
+async function unban(id) {
+  if (!confirm('Unban ' + short(id) + '?')) return;
+  try { await db.ref('bans/' + id).remove(); note('Unbanned.'); }
+  catch (e) { note('Failed: ' + e.message); }
+}
+async function clearReports(g) {
+  if (!confirm('Delete ' + g.keys.length + ' report(s) about ' + short(g.id) + '?')) return;
+  const up = {};
+  g.keys.forEach(k => { up[k] = null; });
+  try { await db.ref('reports').update(up); }
+  catch (e) { note('Failed: ' + e.message); }
+}
+</script>
+</body>
+</html>
