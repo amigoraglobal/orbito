@@ -8,7 +8,7 @@ const STALE_MS = 20000;
 const ICE = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' }
-];
+].concat(Array.isArray(window.ORBITO_TURN) ? window.ORBITO_TURN : []);
 
 // ---------- Helpers ----------
 const $ = id => document.getElementById(id);
@@ -37,6 +37,8 @@ function show(id) {
   ['homeScreen', 'callScreen'].forEach(s => $(s).classList.toggle('hidden', s !== id));
 }
 function setStatus(t) { $('status').textContent = t; }
+function dbg(t) { const d = $('dbg'); if (d) d.textContent = t || ''; }
+function errText(e) { return String((e && (e.code || e.message)) || e); }
 
 // ---------- Init ----------
 async function init() {
@@ -194,10 +196,11 @@ async function search() {
     heartbeat = setInterval(() => {
       if (token !== searchToken || !wref) return;
       wref.update({ ts: TS() }).catch(() => {});
-      tryClaim(lookPool, true, token).catch(() => {});
+      tryClaim(lookPool, true, token).catch(e => dbg('Error: ' + errText(e)));
     }, 5000);
   } catch (e) {
     setStatus('Network problem. Tap Next to retry.');
+    dbg('Error: ' + errText(e));
   }
 }
 
@@ -265,6 +268,9 @@ async function startPeer(isCaller, callId, partner) {
 
   const myPc = new RTCPeerConnection({ iceServers: ICE });
   pc = myPc;
+  const cands = { host: 0, srflx: 0, relay: 0 };
+  const showIce = () => dbg('ICE ' + myPc.iceConnectionState + ' · host ' + cands.host + ' · srflx ' + cands.srflx + ' · relay ' + cands.relay);
+  myPc.oniceconnectionstatechange = () => { if (pc === myPc) showIce(); };
   localStream.getTracks().forEach(t => myPc.addTrack(t, localStream));
   myPc.ontrack = e => { $('remoteVideo').srcObject = e.streams[0]; };
 
@@ -278,12 +284,19 @@ async function startPeer(isCaller, callId, partner) {
   const addCand = c => myPc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
   const flush = () => { remoteSet = true; queue.splice(0).forEach(addCand); };
 
-  myPc.onicecandidate = e => { if (e.candidate) mine.push(e.candidate.toJSON()); };
+  myPc.onicecandidate = e => {
+    if (!e.candidate) return;
+    const m = / typ (host|srflx|relay)/.exec(e.candidate.candidate || '');
+    if (m) cands[m[1]]++;
+    if (pc === myPc) showIce();
+    mine.push(e.candidate.toJSON());
+  };
   myPc.onconnectionstatechange = () => {
     if (pc !== myPc) return;
     const s = myPc.connectionState;
     if (s === 'connected') {
       clearTimeout(connectTimer);
+      dbg('');
       setStatus('Connected');
       $('remoteWrap').classList.add('live');
     } else if (s === 'failed') {
@@ -337,6 +350,7 @@ async function startPeer(isCaller, callId, partner) {
       });
     }
   } catch (e) {
+    dbg('Error: ' + errText(e));
     partnerGone('Could not connect');
   }
 }
@@ -391,6 +405,7 @@ function goHome() {
   leaveCall();
   stopMedia();
   clearInterval(adTimer);
+  dbg('');
   $('ad').classList.add('hidden');
   adShowing = false;
   show('homeScreen');
