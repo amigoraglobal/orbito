@@ -8,3 +8,11 @@ window.ORBITO_CONFIG = {
   messagingSenderId: "616860582191",
   appId: "1:616860582191:web:6d6b0f9d48640e5ab5a1da"
 };
+
+window.ORBITO_TURN = [
+  { urls: "stun:stun.relay.metered.ca:80" },
+  { urls: "turn:global.relay.metered.ca:80", username: "f2335ef305dc58d1ac686f7f", credential: "K3N5bVCueKcoQsRN" },
+  { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "f2335ef305dc58d1ac686f7f", credential: "K3N5bVCueKcoQsRN" },
+  { urls: "turn:global.relay.metered.ca:443", username: "f2335ef305dc58d1ac686f7f", credential: "K3N5bVCueKcoQsRN" },
+  { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "f2335ef305dc58d1ac686f7f", credential: "K3N5bVCueKcoQsRN" }
+];
