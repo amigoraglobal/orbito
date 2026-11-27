@@ -34,6 +34,7 @@ select{background:#0f1428;border:1px solid var(--line);border-radius:10px;paddin
 .btn.alt{background:#1d2542;border:1px solid var(--line)}
 .btn:disabled{opacity:.45}
 .small{font-size:12px;color:var(--muted);line-height:1.5;margin:0}
+.small a{color:#a99bff}
 .warn{background:#3a2a12;border:1px solid #7a5a1c;color:#ffd58a;padding:12px;border-radius:12px;font-size:14px;margin:12px}
 #callScreen{position:fixed;inset:0;background:#000}
 #remoteWrap{position:relative;flex:1;background:radial-gradient(circle at 50% 40%,#1b2350,#05070f)}
@@ -105,6 +106,7 @@ select{background:#0f1428;border:1px solid var(--line);border-radius:10px;paddin
   <button class="btn alt" id="premiumBtn">Premium (demo): OFF</button>
 
   <p class="small">Be kind. Nudity, harassment and anything involving minors are not allowed. You can report and block anyone during a chat. Orbito is for adults (18+) only.</p>
+  <p class="small"><a href="terms.html">Terms of Use</a> &middot; <a href="privacy.html">Privacy Policy</a></p>
 </section>
 
 <section id="callScreen" class="hidden">
@@ -144,7 +146,7 @@ select{background:#0f1428;border:1px solid var(--line);border-radius:10px;paddin
       <li>Never share money, passwords or private details with strangers.</li>
       <li>Reported users get blocked.</li>
     </ul>
-    <label class="chk"><input type="checkbox" id="ageChk"> I am 18 or older and I agree to these rules.</label>
+    <label class="chk"><input type="checkbox" id="ageChk"><span>I am 18 or older and I agree to these rules, the <a href="terms.html" target="_blank" rel="noopener" style="color:#a99bff">Terms of Use</a> and the <a href="privacy.html" target="_blank" rel="noopener" style="color:#a99bff">Privacy Policy</a>.</span></label>
     <button class="btn" id="gateOk" disabled>Continue</button>
   </div>
 </div>
